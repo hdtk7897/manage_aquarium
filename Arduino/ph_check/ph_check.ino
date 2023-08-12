@@ -22,9 +22,9 @@ void loop() {
   float diff = neutral_val - average;
   float phVal = (intercept - diff * slope) / 100;
   
-  Serial.print("voltage = ");
+  Serial.print("voltage : ");
   Serial.print(average);
-  Serial.print(", ph = ");
+  Serial.print(", ph : ");
   Serial.println(phVal);
   delay(1000);
 }

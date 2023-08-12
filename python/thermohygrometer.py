@@ -8,6 +8,8 @@ import subprocess
 import datetime
 import requests
 import pprint
+import serial
+import re
 
 # 温湿度計
 i2c = smbus.SMBus(1)
@@ -18,6 +20,10 @@ SENSOR_ID = "28-3c1b04572da2"
 SENSOR_W1_SLAVE = "/sys/bus/w1/devices/" + SENSOR_ID + "/w1_slave"
 ERR_VAL = 85000
 TEMP_WARN = 28.0
+
+# ph
+ARDUINO_CON=serial.Serial('/dev/ttyACM0', 9600)
+
 
 # 出力
 OUTPUT_DIR = "/home/pi/log"
@@ -31,19 +37,21 @@ def main():
     
     temp, humid = get_temp_humid()
     w_temp = get_water_temp()
+    w_ph = get_ph()
     if w_temp >= TEMP_WARN:
         notice_line(w_temp)
-    out_log(str(temp), str(humid), str(w_temp), OUTPUT_DIR)
+    out_log(str(temp), str(humid), str(w_temp), str(w_ph), OUTPUT_DIR)
+    
 #    print(result)
 
-def out_log(temp, humid, w_temp, log_path):
+def out_log(temp, humid, w_temp, w_ph, log_path):
     dt_now = datetime.datetime.now()
     date_file = 'temp{0}.log'.format(dt_now.strftime('%Y%m%d'))
     file_path = '{0}/{1}'.format(OUTPUT_DIR, date_file)
     date = dt_now.strftime('%Y/%m/%d')
     time = dt_now.strftime('%H:%M:%S')
 #    result = '{0} 温度={1:0.1f}℃ 湿度={2:0.1f}% 水温={3}℃'.format(dt_out, temperature, humidity, water_temp)
-    result = ', '.join([date, time, temp, humid, w_temp])
+    result = ', '.join([date, time, temp, humid, w_temp, w_ph])
     with open(file_path, mode='a', encoding='UTF-8', newline='\n') as f:
         f.write(result+'\n')
 
@@ -92,6 +100,22 @@ def get_temp_humid():
     
     return temperature, humidity
 
+def get_ph():
+    arduino_val=ARDUINO_CON.readline() # byte code
+    decode_val=arduino_val.strip().decode('utf-8')
+#    dict_val=json.loads('{"key":"value"}')
+#    dict_val=json.loads('{"voltage" : "777.16", "ph" : "7.45"}')
+#    m = re.match(r'ch: ([0-9]*)', decode_val)
+#    m = re.match(r'([a-z]+)@([a-z]+)\.([a-z]+)', dict_val)
+    m = re.search(r'ph : ([0-9\.]*)', decode_val)
+    if m:
+        return m.groups()[0]
+    else:
+        return 0
+#    dict_val=json.loads(json_val)
+#    print(dict_val['ph'])
+    
+
+
 if __name__ == '__main__':
     main()
-    
