@@ -5,12 +5,13 @@ import sys
 import time
 import smbus
 import subprocess
+from subprocess import PIPE
 import datetime
 import requests
 import pprint
 import serial
 import re
-import RPi.GPIO as GPIO
+from gpiozero import LED
 import sqlite3
 import json
 import configparser
@@ -26,6 +27,7 @@ TEMP_MAX = 27.5
 FAN_ON = 26.5
 FAN_OFF = 25.0
 GPIO_FAN = 17
+GPIO_FAN_OPP = 27
 
 # ph
 ARDUINO_PATH = '/dev/ttyACM0'
@@ -42,7 +44,7 @@ ERROR_FILE = "error.log"
 LINE_URL = 'https://notify-api.line.me/api/notify'
 
 DB_PATH = config['COMMON']['HOME_PATH'] + '/aquarium.sqlite'
-
+SH_PATH = config['COMMON']['HOME_PATH'] + '/manage_aquarium/sh'
 
 
 def main():
@@ -52,7 +54,7 @@ def main():
         notice_line(w_temp)
     out_log(dt_now, str(a_temp), str(a_humid), str(w_temp), str(w_ph), LOG_DIR)
     out_sqlite(dt_now, str(a_temp), str(a_humid), str(w_temp), str(w_ph))
-#    set_fan(dt_now, w_temp)
+    set_fan(dt_now, w_temp)
 #    print_error('test')
 #    print(result)
 
@@ -67,25 +69,33 @@ def out_log(dt_now, temp, humid, w_temp, w_ph, log_path):
     with open(file_path, mode='a', encoding='UTF-8', newline='\n') as f:
         f.write(result+'\n')
 
-def set_fan(dt_now, w_temp):
+def set_fan(dt_now, w_temp_string):
+    w_temp = float(w_temp_string)
     date_file = 'temp{0}.log'.format(dt_now.strftime('%Y%m%d'))
     file_path = '{0}/{1}'.format(LOG_DIR, date_file)
 
-    # GPIO番号指定の準備
-    GPIO.setmode(GPIO.BCM)
-
-    # LEDピンを出力に設定
-    GPIO.setup(GPIO_FAN, GPIO.OUT)
+    set_gpio(GPIO_FAN, "on")
 
     if w_temp >= FAN_ON:
-        GPIO.output(GPIO_FAN, 1)
+        set_gpio(GPIO_FAN, "on")
+        set_gpio(GPIO_FAN_OPP, "off")
+    
         with open(file_path, mode='a', encoding='UTF-8', newline='\n') as f:
             f.write('fan on\n')
+        print('fan on')
 
     if w_temp <= FAN_OFF:
-        GPIO.output(GPIO_FAN, 0)
+        set_gpio(GPIO_FAN, "off")
+        set_gpio(GPIO_FAN_OPP, "on")
         with open(file_path, mode='a', encoding='UTF-8', newline='\n') as f:
             f.write('fan off\n')
+        print('fan off')
+        
+#    time.sleep(10)
+
+def set_gpio(num, sw):
+    sh_cmd = SH_PATH + "/set_gpio.sh " + str(num) + " " + sw
+    subprocess.Popen( sh_cmd, shell=True, stdout=PIPE, stderr=PIPE, text=True)
 
 
 def out_sqlite(dt_now, temp, humid, w_temp, w_ph):
