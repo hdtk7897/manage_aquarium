@@ -21,11 +21,11 @@ config.read('/etc/manage_aquarium.ini')
 
 # # 水温計
 TEMP_MIN = 24.5
-TEMP_MAX = 27.5
+TEMP_MAX = 29.5
 
 # ファン
-FAN_ON = 26.5
-FAN_OFF = 25.0
+FAN_ON = 28.0
+FAN_OFF = 26.5
 GPIO_FAN = 17
 GPIO_FAN_OPP = 27
 
@@ -74,7 +74,7 @@ def set_fan(dt_now, w_temp_string):
     date_file = 'temp{0}.log'.format(dt_now.strftime('%Y%m%d'))
     file_path = '{0}/{1}'.format(LOG_DIR, date_file)
 
-    set_gpio(GPIO_FAN, "on")
+#    set_gpio(GPIO_FAN_OPP, "on")
 
     if w_temp >= FAN_ON:
         set_gpio(GPIO_FAN, "on")
@@ -96,6 +96,7 @@ def set_fan(dt_now, w_temp_string):
 def set_gpio(num, sw):
     sh_cmd = SH_PATH + "/set_gpio.sh " + str(num) + " " + sw
     subprocess.Popen( sh_cmd, shell=True, stdout=PIPE, stderr=PIPE, text=True)
+    print(sh_cmd)
 
 
 def out_sqlite(dt_now, temp, humid, w_temp, w_ph):
@@ -130,7 +131,7 @@ def out_sqlite(dt_now, temp, humid, w_temp, w_ph):
 def notice_line(temp):
     try:
         token = config['LINE']['TOKEN']
-        headers = {'accept':'application/json','Authorization': 'Bearer {}'.format(TOKEN) } 
+        headers = {'accept':'application/json','Authorization': 'Bearer {}'.format(token) } 
         message = 'message= temperature:{}'.format(temp) 
 #        print(headers)
         r_get = requests.post(LINE_URL, params=message, headers=headers)
