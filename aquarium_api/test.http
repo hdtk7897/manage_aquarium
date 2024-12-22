@@ -1,0 +1,10 @@
+POST http://127.0.0.1:8000/graphql
+Content-Type: application/json
+X-REQUEST-TYPE: GraphQL
+
+query{
+  user{
+    name
+    age
+  }
+}
