@@ -105,21 +105,22 @@ def out_sqlite(dt_now, temp, humid, w_temp, w_ph):
 
     date = dt_now.strftime('%Y/%m/%d')
     time = dt_now.strftime('%H:%M:%S')
-
+    unixtime = int(datetime.datetime.timestamp(dt_now))
     try:
         # CREATE（「id、name」のテーブルを作成）
         cursor.execute("CREATE TABLE IF NOT EXISTS aquarium \
             (id integer primary key autoincrement, \
              date TEXT, \
              time TEXT, \
+             unixtime integer, \
              air_temp REAL, \
-             air_himid REAL, \
+             air_humid REAL, \
              water_temp REAL, \
              water_ph REAL)")
 
         # INSERT
-        cursor.execute("INSERT INTO aquarium(date, time, air_temp, air_himid, water_temp, water_ph)\
-             VALUES(?,?,?,?,?,?)", (date, time, temp, humid, w_temp, w_ph))
+        cursor.execute("INSERT INTO aquarium(date, time, unixtime, air_temp, air_humid, water_temp, water_ph)\
+             VALUES(?,?,?,?,?,?)", (date, time, unixtime, temp, humid, w_temp, w_ph))
 
     except sqlite3.Error as e:
         print_error('sqlite3.Error occurred:', e.args[0])

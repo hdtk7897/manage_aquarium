@@ -20,9 +20,11 @@ class AquaEnvType:
 @strawberry.type
 class Query:
     @strawberry.field
-    async def aquaenv(self) -> List[AquaEnvType]:
+    async def aquaenv(self, start_at: str , limit: int = 100) -> List[AquaEnvType]:
             db=get_db()
-            aquaenvList = db.query(AquaEnv).all()
+            aquaenvList = db.query(AquaEnv)\
+                .order_by(AquaEnv.date.desc(), AquaEnv.time.desc())\
+                .limit(limit).all()
             return [AquaEnvType(\
                  id=aquaenv.id,\
                  date=aquaenv.date,\
