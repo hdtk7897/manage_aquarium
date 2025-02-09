@@ -1,10 +1,20 @@
+###
 POST http://127.0.0.1:8000/graphql
 Content-Type: application/json
 X-REQUEST-TYPE: GraphQL
 
-query{
-  user{
-    name
-    age
+query {
+  aquaenv(startAt:1730014073) {
+    id
+    date
+    time
+    unixtime
+    airTemp
+    waterTemp
   }
 }
+###
+http://127.0.0.1:8000/
+
+###
+http://127.0.0.1:8000/graphql

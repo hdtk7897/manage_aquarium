@@ -40,18 +40,18 @@ class Query:
                     .order_by(AquaEnv.unixtime.desc())\
                     .limit(limit).all()
             else:
-                # aquaenvList = db.query(AquaEnv)\
-                #     .filter(AquaEnv.unixtime > startAt)\
-                #     .filter(AquaEnv.unixtime <= endAt)\
-                #     .order_by(AquaEnv.unixtime.asc())\
-                #     .limit(limit).all()
-                aquaenvList = db.query(AquaEnv, \
-                        func.avg(AquaEnv.air_temp))\
+                aquaenvList = db.query(AquaEnv)\
                     .filter(AquaEnv.unixtime > startAt)\
                     .filter(AquaEnv.unixtime <= endAt)\
-                    .group_by(AquaEnv.avg_unixtime)\
                     .order_by(AquaEnv.unixtime.asc())\
                     .limit(limit).all()
+                # aquaenvList = db.query(AquaEnv, \
+                #         func.avg(AquaEnv.air_temp))\
+                #     .filter(AquaEnv.unixtime > startAt)\
+                #     .filter(AquaEnv.unixtime <= endAt)\
+                #     .group_by(AquaEnv.avg_unixtime)\
+                #     .order_by(AquaEnv.unixtime.asc())\
+                #     .limit(limit).all()
                 
 
             return [AquaEnvType(\
