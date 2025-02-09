@@ -120,7 +120,7 @@ def out_sqlite(dt_now, temp, humid, w_temp, w_ph):
 
         # INSERT
         cursor.execute("INSERT INTO aquarium(date, time, unixtime, air_temp, air_humid, water_temp, water_ph)\
-             VALUES(?,?,?,?,?,?)", (date, time, unixtime, temp, humid, w_temp, w_ph))
+             VALUES(?,?,?,?,?,?,?)", (date, time, unixtime, temp, humid, w_temp, w_ph))
 
     except sqlite3.Error as e:
         print_error('sqlite3.Error occurred:', e.args[0])
