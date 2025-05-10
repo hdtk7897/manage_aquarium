@@ -50,19 +50,19 @@ def main():
     w_ph, w_temp, a_temp, a_humid = get_arduino()
     if float(w_temp) >= TEMP_MAX or float(w_temp) <= TEMP_MIN:
         notice_line(w_temp)
-    out_log(dt_now, str(a_temp), str(a_humid), str(w_temp), str(w_ph), LOG_DIR)
-    out_sqlite(dt_now, str(a_temp), str(a_humid), str(w_temp), str(w_ph))
-    set_fan(dt_now, w_temp)
+    fan_sw = set_fan(dt_now, w_temp)
+    out_log(dt_now, str(a_temp), str(a_humid), str(w_temp), str(w_ph), fan_sw, LOG_DIR)
+    out_sqlite(dt_now, str(a_temp), str(a_humid), str(w_temp), str(w_ph), fan_sw)
 #    print_error('test')
 #    print(result)
 
-def out_log(dt_now, temp, humid, w_temp, w_ph, log_path):
+def out_log(dt_now, temp, humid, w_temp, w_ph, fan_sw, log_path):
     date_file = 'temp{0}.log'.format(dt_now.strftime('%Y%m%d'))
     file_path = '{0}/{1}'.format(LOG_DIR, date_file)
     date = dt_now.strftime('%Y/%m/%d')
     time = dt_now.strftime('%H:%M:%S')
 #    result = '{0} 温度={1:0.1f}℃ 湿度={2:0.1f}% 水温={3}℃'.format(dt_out, temperature, humidity, water_temp)
-    result = ', '.join([date, time, temp, humid, w_temp, w_ph])
+    result = ', '.join([date, time, temp, humid, w_temp, w_ph, fan_sw])
     print(result)
     with open(file_path, mode='a', encoding='UTF-8', newline='\n') as f:
         f.write(result+'\n')
@@ -81,6 +81,7 @@ def set_fan(dt_now, w_temp_string):
         with open(file_path, mode='a', encoding='UTF-8', newline='\n') as f:
             f.write('fan on\n')
         print('fan on')
+        return "ON"
 
     if w_temp <= FAN_OFF:
         set_gpio(GPIO_FAN, "off")
@@ -88,6 +89,7 @@ def set_fan(dt_now, w_temp_string):
         with open(file_path, mode='a', encoding='UTF-8', newline='\n') as f:
             f.write('fan off\n')
         print('fan off')
+        return "OFF"
         
 #    time.sleep(10)
 
@@ -97,13 +99,26 @@ def set_gpio(num, sw):
     print(sh_cmd)
 
 
-def out_sqlite(dt_now, temp, humid, w_temp, w_ph):
+def out_sqlite(dt_now, temp, humid, w_temp, w_ph, fan_sw):
     connection = sqlite3.connect(DB_PATH)
     cursor = connection.cursor()
 
     date = dt_now.strftime('%Y/%m/%d')
     time = dt_now.strftime('%H:%M:%S')
     unixtime = int(datetime.datetime.timestamp(dt_now))
+    unittime = round(unixtime / 600) * 600
+
+    time_group = 0
+    # 24時間ごと
+    if unittime % 86400 == 10800:
+        time_group = 30
+    # 6時間ごと
+    elif unittime % 21600 == 10800:
+        time_group = 20
+    # 1時間ごと
+    elif unittime % 3600 == 0:
+        time_group = 10
+
     try:
         # CREATE（「id、name」のテーブルを作成）
         cursor.execute("CREATE TABLE IF NOT EXISTS aquarium \
@@ -117,71 +132,15 @@ def out_sqlite(dt_now, temp, humid, w_temp, w_ph):
              water_ph REAL)")
 
         # INSERT
-        cursor.execute("INSERT INTO aquarium(date, time, unixtime, air_temp, air_humid, water_temp, water_ph)\
-             VALUES(?,?,?,?,?,?,?)", (date, time, unixtime, temp, humid, w_temp, w_ph))
+        cursor.execute("INSERT INTO aquarium(date, time, unixtime, air_temp, air_humid, water_temp, water_ph, unit_time, time_group, fan_sw)\
+             VALUES(?,?,?,?,?,?,?,?,?)", (date, time, unixtime, temp, humid, w_temp, w_ph, unittime, time_group, fan_sw))
 
     except sqlite3.Error as e:
-        print_error('sqlite3.Error occurred:', e.args[0])
+        print_error(f'sqlite3.Error occurred:{e.args[0]}')
 
     connection.commit()
     connection.close()
 
-# 1時間, 6時間, 24時間ごとの平均を記録する
-def summary_data(unixtime):
-    air_temp_avg, air_humid_avg, water_temp_avg, water_ph_avg = extract_average_data(unixtime)
-
-    dt_jst_aware = datetime.datetime.fromtimestamp(unixtime, datetime.timezone(datetime.timedelta(hours=9)))
-    date = dt_jst_aware.strftime('%Y/%m/%d')
-    time = dt_jst_aware.strftime('%H:%M:%S')
-    # print(f"{date} {time}")
-
-    connection = sqlite3.connect(DB_PATH)
-    cursor = connection.cursor()
-
-    try:
-        # CREATE（「id、name」のテーブルを作成）
-        cursor.execute("CREATE TABLE IF NOT EXISTS aquarium_avg \
-            (id integer primary key autoincrement, \
-            date	TEXT,\
-            time	TEXT,\
-            unixtime	integer,\
-            range_group	integer,\
-            air_temp_avg	REAL,\
-            air_himid_avg	REAL,\
-            water_temp_avg	REAL,\
-            water_ph_avg	REAL)")
-
-        # INSERT
-        cursor.execute("INSERT INTO aquarium_avg(date, time, unixtime, range_group, air_temp_avg, air_humid_avg, water_temp_avg, water_ph_avg)\
-             VALUES(?,?,?,?,?,?,?,?)", (date, time, unixtime, 60, air_temp_avg, air_humid_avg, water_temp_avg, water_ph_avg))
-        
-
-
-    except sqlite3.Error as e:
-        print_error('sqlite3.Error occurred:', e.args[0])
-
-    connection.commit()
-    connection.close()
-
-def extract_average_data(unixtime):
-    connection = sqlite3.connect(DB_PATH)
-    cursor = connection.cursor()
-
-    datetimefrom = unixtime - 3600
-    datetimeto = unixtime + 540
-
-    df = pd.read_sql_query(sql=f"SELECT date, time, unixtime, air_temp, air_humid, water_temp, water_ph \
-            from aquarium where unixtime between {datetimefrom} and {datetimeto} ;", con=connection)
-    air_temp_avg = df["air_temp"].mean().round(1)
-    air_humid_avg = df["air_humid"].mean().round(1)
-    water_temp_avg = df["water_temp"].mean().round(1)
-    water_ph_avg = df["water_ph"].mean().round(2)
-
-    # print(df)
-    # print(f"{air_temp_avg},{air_humid_avg},{water_temp_avg},{water_ph_avg}")
-
-    connection.close()
-    return air_temp_avg, air_humid_avg, water_temp_avg, water_ph_avg
 
 def notice_line(temp):
     try:
