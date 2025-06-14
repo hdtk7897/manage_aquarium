@@ -3,6 +3,7 @@
 
 import sys
 import time
+import json
 import subprocess
 from subprocess import PIPE
 import datetime
@@ -38,8 +39,6 @@ ARDUINO_INTERVAL = 0.5
 LOG_DIR = config['COMMON']['HOME_PATH'] + "/log"
 ERROR_FILE = "error.log"
 
-# LINE API
-LINE_URL = 'https://notify-api.line.me/api/notify'
 
 DB_PATH = config['COMMON']['HOME_PATH'] + '/aquarium.sqlite'
 SH_PATH = config['COMMON']['HOME_PATH'] + '/manage_aquarium/sh'
@@ -51,21 +50,16 @@ def main():
     if float(w_temp) >= TEMP_MAX or float(w_temp) <= TEMP_MIN:
         notice_line(w_temp)
     fan_sw = set_fan(dt_now, w_temp)
-    out_log(dt_now, str(a_temp), str(a_humid), str(w_temp), str(w_ph), fan_sw, LOG_DIR)
     out_sqlite(dt_now, str(a_temp), str(a_humid), str(w_temp), str(w_ph), fan_sw)
 #    print_error('test')
 #    print(result)
 
-def out_log(dt_now, temp, humid, w_temp, w_ph, fan_sw, log_path):
+def out_log(str, dt_now):
     date_file = 'temp{0}.log'.format(dt_now.strftime('%Y%m%d'))
     file_path = '{0}/{1}'.format(LOG_DIR, date_file)
-    date = dt_now.strftime('%Y/%m/%d')
-    time = dt_now.strftime('%H:%M:%S')
-#    result = '{0} 温度={1:0.1f}℃ 湿度={2:0.1f}% 水温={3}℃'.format(dt_out, temperature, humidity, water_temp)
-    result = ', '.join([date, time, temp, humid, w_temp, w_ph, fan_sw])
-    print(result)
+    print(str)
     with open(file_path, mode='a', encoding='UTF-8', newline='\n') as f:
-        f.write(result+'\n')
+        f.write(str+'\n')
 
 def set_fan(dt_now, w_temp_string):
     w_temp = float(w_temp_string)
@@ -90,6 +84,9 @@ def set_fan(dt_now, w_temp_string):
             f.write('fan off\n')
         print('fan off')
         return "OFF"
+    
+    val = get_gpio(GPIO_FAN_OPP)
+    return "ON" if val == "lo" else "OFF"
         
 #    time.sleep(10)
 
@@ -98,6 +95,15 @@ def set_gpio(num, sw):
     subprocess.Popen( sh_cmd, shell=True, stdout=PIPE, stderr=PIPE, text=True)
     print(sh_cmd)
 
+def get_gpio(num):
+    if num == GPIO_FAN_OPP:
+        sh_cmd = SH_PATH + "/get_gpio.sh " + str(num) + " hi"
+    else: 
+        sh_cmd = SH_PATH + "/get_gpio.sh " + str(num)
+    result = subprocess.Popen( sh_cmd, shell=True, stdout=PIPE, stderr=PIPE, text=True)
+
+    line = result.stdout.readlines()[0].rstrip('\r\n')
+    return line
 
 def out_sqlite(dt_now, temp, humid, w_temp, w_ph, fan_sw):
     connection = sqlite3.connect(DB_PATH)
@@ -132,8 +138,9 @@ def out_sqlite(dt_now, temp, humid, w_temp, w_ph, fan_sw):
              water_ph REAL)")
 
         # INSERT
+        out_log(f"{date}, {time}, {unixtime}, {temp}, {humid}, {w_temp}, {w_ph}, {unittime}, {time_group}, {fan_sw}", dt_now)
         cursor.execute("INSERT INTO aquarium(date, time, unixtime, air_temp, air_humid, water_temp, water_ph, unit_time, time_group, fan_sw)\
-             VALUES(?,?,?,?,?,?,?,?,?)", (date, time, unixtime, temp, humid, w_temp, w_ph, unittime, time_group, fan_sw))
+             VALUES(?,?,?,?,?,?,?,?,?,?)", (date, time, unixtime, temp, humid, w_temp, w_ph, unittime, time_group, fan_sw))
 
     except sqlite3.Error as e:
         print_error(f'sqlite3.Error occurred:{e.args[0]}')
@@ -142,15 +149,11 @@ def out_sqlite(dt_now, temp, humid, w_temp, w_ph, fan_sw):
     connection.close()
 
 
-def notice_line(temp):
+def notice_line(message):
     try:
-        token = config['LINE']['TOKEN']
-        headers = {'accept':'application/json','Authorization': 'Bearer {}'.format(token) } 
-        message = 'message= temperature:{}'.format(temp) 
-#        print(headers)
-        r_get = requests.post(LINE_URL, params=message, headers=headers)
-#        print(r_get.url)
-        print(r_get.text)
+        sh_cmd = SH_PATH + "/notice_line.sh " + str(message)
+        subprocess.Popen( sh_cmd, shell=True, stdout=PIPE, stderr=PIPE, text=True)
+
     except requests.exceptions.RequestException as e:
         print_error("APIエラー : ",e)    
 
