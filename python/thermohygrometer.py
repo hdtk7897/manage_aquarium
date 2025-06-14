@@ -112,6 +112,36 @@ def out_sqlite(dt_now, temp, humid, w_temp, w_ph, fan_sw):
     date = dt_now.strftime('%Y/%m/%d')
     time = dt_now.strftime('%H:%M:%S')
     unixtime = int(datetime.datetime.timestamp(dt_now))
+    unittime, time_group = calc_unittime_and_group(unixtime)
+
+    try:
+        # CREATE（「id、name」のテーブルを作成）
+        cursor.execute("CREATE TABLE IF NOT EXISTS aquarium \
+            (id integer primary key autoincrement, \
+             date TEXT, \
+             time TEXT, \
+             unixtime integer, \
+             air_temp REAL, \
+             air_humid REAL, \
+             water_temp REAL, \
+             water_ph REAL, \
+             unittime integer, \
+             time_group integer,\
+             fan_sw TEXT")
+
+        # INSERT
+        cursor.execute("INSERT INTO aquarium(date, time, unixtime, air_temp, air_humid, \
+                       water_temp, water_ph, unit_time, time_group, fan_sw)\
+             VALUES(?,?,?,?,?,?,?,?,?)", (date, time, unixtime, temp, humid, \
+                                          w_temp, w_ph, unittime, time_group, fan_sw))
+
+    except sqlite3.Error as e:
+        print_error(f'sqlite3.Error occurred:{e.args[0]}')
+
+    connection.commit()
+    connection.close()
+
+def calc_unittime_and_group(unixtime):
     unittime = round(unixtime / 600) * 600
 
     time_group = 0
@@ -125,28 +155,7 @@ def out_sqlite(dt_now, temp, humid, w_temp, w_ph, fan_sw):
     elif unittime % 3600 == 0:
         time_group = 10
 
-    try:
-        # CREATE（「id、name」のテーブルを作成）
-        cursor.execute("CREATE TABLE IF NOT EXISTS aquarium \
-            (id integer primary key autoincrement, \
-             date TEXT, \
-             time TEXT, \
-             unixtime integer, \
-             air_temp REAL, \
-             air_humid REAL, \
-             water_temp REAL, \
-             water_ph REAL)")
-
-        # INSERT
-        out_log(f"{date}, {time}, {unixtime}, {temp}, {humid}, {w_temp}, {w_ph}, {unittime}, {time_group}, {fan_sw}", dt_now)
-        cursor.execute("INSERT INTO aquarium(date, time, unixtime, air_temp, air_humid, water_temp, water_ph, unit_time, time_group, fan_sw)\
-             VALUES(?,?,?,?,?,?,?,?,?,?)", (date, time, unixtime, temp, humid, w_temp, w_ph, unittime, time_group, fan_sw))
-
-    except sqlite3.Error as e:
-        print_error(f'sqlite3.Error occurred:{e.args[0]}')
-
-    connection.commit()
-    connection.close()
+    return unittime, time_group
 
 
 def notice_line(message):
