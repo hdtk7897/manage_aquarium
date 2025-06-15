@@ -43,6 +43,10 @@ ERROR_FILE = "error.log"
 DB_PATH = config['COMMON']['HOME_PATH'] + '/aquarium.sqlite'
 SH_PATH = config['COMMON']['HOME_PATH'] + '/manage_aquarium/sh'
 
+LINE_URL = "https://api.line.me/v2/bot/message/push"
+LINE_TOKEN = config['LINE']['TOKEN']
+LINE_USERID = config['LINE']['USERID']
+
 
 def main():
     dt_now = datetime.datetime.now()
@@ -127,16 +131,16 @@ def out_sqlite(dt_now, temp, humid, w_temp, w_ph, fan_sw):
              water_ph REAL, \
              unittime integer, \
              time_group integer,\
-             fan_sw TEXT")
+             fan_sw TEXT)")
 
         # INSERT
         cursor.execute("INSERT INTO aquarium(date, time, unixtime, air_temp, air_humid, \
                        water_temp, water_ph, unit_time, time_group, fan_sw)\
-             VALUES(?,?,?,?,?,?,?,?,?)", (date, time, unixtime, temp, humid, \
-                                          w_temp, w_ph, unittime, time_group, fan_sw))
+             VALUES(?,?,?,?,?,?,?,?,?,?)", (date, time, unixtime, temp, humid, w_temp, \
+                                            w_ph, unittime, time_group, fan_sw))
 
     except sqlite3.Error as e:
-        print_error(f'sqlite3.Error occurred:{e.args[0]}')
+        print_error(f'sqlite3.Error occurred:{e}')
 
     connection.commit()
     connection.close()
@@ -158,13 +162,17 @@ def calc_unittime_and_group(unixtime):
     return unittime, time_group
 
 
-def notice_line(message):
+def notice_line(text):
     try:
-        sh_cmd = SH_PATH + "/notice_line.sh " + str(message)
-        subprocess.Popen( sh_cmd, shell=True, stdout=PIPE, stderr=PIPE, text=True)
-
+        headers = {'content-type':'application/json','Authorization': f'Bearer {LINE_TOKEN}' } 
+        message = f'{{"to":"{LINE_USERID}", "messages" :[{{"type":"text","text":"{text}"}}]}}' 
+        response = requests.post(
+            LINE_URL, 
+            data=message, 
+            headers=headers)
+        print(response.text)
     except requests.exceptions.RequestException as e:
-        print_error("APIエラー : ",e)    
+        print("APIエラー : ",e)    
 
 def get_water_temp():
     try:
