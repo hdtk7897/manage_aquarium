@@ -55,8 +55,6 @@ def main():
         notice_line(w_temp)
     fan_sw = set_fan(dt_now, w_temp)
     out_sqlite(dt_now, str(a_temp), str(a_humid), str(w_temp), str(w_ph), fan_sw)
-#    print_error('test')
-#    print(result)
 
 def out_log(str, dt_now):
     date_file = 'temp{0}.log'.format(dt_now.strftime('%Y%m%d'))
@@ -69,8 +67,6 @@ def set_fan(dt_now, w_temp_string):
     w_temp = float(w_temp_string)
     date_file = 'temp{0}.log'.format(dt_now.strftime('%Y%m%d'))
     file_path = '{0}/{1}'.format(LOG_DIR, date_file)
-
-#    set_gpio(GPIO_FAN_OPP, "on")
 
     if w_temp >= FAN_ON:
         set_gpio(GPIO_FAN, "on")
@@ -92,8 +88,6 @@ def set_fan(dt_now, w_temp_string):
     val = get_gpio(GPIO_FAN_OPP)
     return "ON" if val == "lo" else "OFF"
         
-#    time.sleep(10)
-
 def set_gpio(num, sw):
     sh_cmd = SH_PATH + "/set_gpio.sh " + str(num) + " " + sw
     subprocess.Popen( sh_cmd, shell=True, stdout=PIPE, stderr=PIPE, text=True)
@@ -146,7 +140,7 @@ def out_sqlite(dt_now, temp, humid, w_temp, w_ph, fan_sw):
     connection.close()
 
 def calc_unittime_and_group(unixtime):
-    unittime = round(unixtime / 600) * 600
+    unittime = round(unixtime / 60) * 60
 
     time_group = 0
     # 24時間ごと
@@ -172,7 +166,7 @@ def notice_line(text):
             headers=headers)
         print(response.text)
     except requests.exceptions.RequestException as e:
-        print("APIエラー : ",e)    
+        print_error("APIエラー : ",e)    
 
 def get_water_temp():
     try:

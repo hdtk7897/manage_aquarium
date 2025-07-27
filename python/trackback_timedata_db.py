@@ -14,28 +14,33 @@ db_connection = sqlite3.connect(dbpath)
 # 自動コミットにする場合は下記を指定（コメントアウトを解除のこと）
 # connection.isolation_level = None
 db_cursor = db_connection.cursor()
+db_cursor2 = db_connection.cursor()
 
 db_col = ["id", "date", "time", "unixtime", "temp", "humid", "w_temp", "w_ph", \
           "unittime", "time_group", "fan_sw"]
 
 try:
-    db_cursor.execute("SELECT id, unixttime from aquarium;")
+    db_cursor.execute("SELECT id, unixtime, unit_time from aquarium;")
+    count = 0
     
     while True:
+        print("fetch")
         db_row = db_cursor.fetchone()
-        
-        if db_row is None:
+        if db_row is None  :
+            print(f"break count:{count}")
             break
         
-        db_dict = dict(zip(["id","unixtime"], db_row))
-        print(db_dict)
+        db_dict = dict(zip(["id","unixtime","unit_time"], db_row))
 
         unittime, time_group = calc_unittime_and_group(db_dict["unixtime"])
 
-        db_cursor.execute(f"update aquarium SET unittime = {unittime}, time_group = {time_group} WHERE id = {db_dict["id"]};")
+        
+        if db_dict["unit_time"] is None:
+            count += 1
+            print(f"unixtime:{db_dict['unixtime']}, unittime:{unittime}, time_group:{time_group}")
 
-        # db_cursor.execute("insert into aquarium(date, time, unixtime, air_temp, air_humid, water_temp, water_ph) values(?,?,?,?,?,?,?)"\
-        #                    ,(old_dict["date"], old_dict["time"], unixtime, old_dict["air_temp"], old_dict["air_himid"], old_dict["water_temp"], old_dict["water_ph"]))
+            db_cursor2.execute(f"update aquarium SET unit_time = {unittime}, time_group = {time_group} WHERE id = {db_dict['id']};")
+
 
 except sqlite3.Error as e:
     print('sqlite3.Error occurred:', e.args[0])

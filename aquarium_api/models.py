@@ -12,10 +12,13 @@ class AquaEnv(Base):
     date = Column(String)
     time = Column(String)
     unixtime = Column(Integer)
+    unit_time = Column(Integer)
     air_temp = Column(Float)
     air_humid = Column(Float)
     water_temp = Column(Float)
     water_ph = Column(Float)
+    time_group  = Column(Integer)
+    fan_sw = Column(String)
 
     @hybrid_property
     def avg_unixtime(self):
