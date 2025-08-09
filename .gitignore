@@ -1,3 +1,8 @@
+/venv/
+/www/node_modules/
+/aquarium_api/__pycache__/
+/python/__pycache__/
 /sh/*
 /*.sqlite
 /config.ini
+*.log

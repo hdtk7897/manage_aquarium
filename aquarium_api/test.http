@@ -1,4 +1,22 @@
 ###
+POST http://hanpen.f5.si:8000/graphql
+Content-Type: application/json
+X-REQUEST-TYPE: GraphQL
+
+query {
+  aquaenv(startAt:1730014073, timeGroup:10) {
+    id
+    date
+    time
+    unixtime
+    unitTime
+    airTemp
+    waterTemp
+    timeGroup
+    fanSw
+  }
+}
+###
 POST http://127.0.0.1:8000/graphql
 Content-Type: application/json
 X-REQUEST-TYPE: GraphQL
@@ -17,7 +35,7 @@ query {
   }
 }
 ###
-http://127.0.0.1:8000/
+GET http://127.0.0.1:8000/mjpeg
 
 ###
 http://127.0.0.1:8000/graphql
