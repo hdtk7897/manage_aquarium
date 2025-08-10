@@ -1,0 +1,11 @@
+String cannot represent value: {'
+{\"0\":{\
+"id\":31319,\
+"date\":\"2025\\\\/01\\\\/28\",
+\"time\":\"15:40:01\",
+\"air_temp\":17.9,\
+"air_himid\":46.0,\
+"water_temp\":25.94,\
+"water...:31220,\
+
+"date\":\"2025\\\\/01\\\\/27\",\"time\":\"23:10:01\",\"air_temp\":20.5,\"air_himid\":52.9,\"water_temp\":26.81,\"water_ph\":7.21}}'}"
