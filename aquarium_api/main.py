@@ -8,6 +8,8 @@ from picamera2.outputs import FileOutput
 
 from schema import schema
 import io
+import time
+import logging
 from threading import Condition
 from fastapi.responses import StreamingResponse
 
@@ -45,16 +47,28 @@ picam2.start_recording(MJPEGEncoder(), FileOutput(output))
 
 
 def get_frame():
-    try:
-        while True:
-            with output.condition:
-                output.condition.wait()
-                frame = output.frame
-                yield (
-                    b"--frame\r\n" b"Content-Type: image/jpeg\r\n\r\n" + frame + b"\r\n"
-                )
-    except Exception as e:
-        print("Error! Frames")
+    logger = logging.getLogger(__name__)
+    backoff = 1
+    max_backoff = 16
+    # Keep the generator alive and retry on errors with exponential backoff
+    while True:
+        try:
+            # Reset backoff on successful loop entry
+            backoff = 1
+            while True:
+                with output.condition:
+                    output.condition.wait()
+                    frame = output.frame
+                    # Skip if we don't have a frame yet
+                    if frame is None:
+                        continue
+                    yield b"--frame\r\n" b"Content-Type: image/jpeg\r\n\r\n" + frame + b"\r\n"
+        except Exception:
+            # Log the exception and retry after sleeping
+            logger.exception("Error reading frames — retrying in %s seconds", backoff)
+            time.sleep(backoff)
+            backoff = min(backoff * 2, max_backoff)
+            # continue to retry
 
 
 
