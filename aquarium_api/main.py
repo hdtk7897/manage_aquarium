@@ -2,9 +2,10 @@ from fastapi import FastAPI, Request
 from strawberry.asgi import GraphQL
 from fastapi.middleware.cors import CORSMiddleware
 
-from picamera2 import Picamera2
-from picamera2.encoders import MJPEGEncoder
-from picamera2.outputs import FileOutput
+import sys
+import subprocess
+from subprocess import PIPE
+import requests
 
 from schema import schema
 import io
@@ -27,48 +28,59 @@ app.add_middleware(
 )
 
 
-class StreamingOutput(io.BufferedIOBase):
-    def __init__(self):
-        self.frame = None
-        self.condition = Condition()
-
-    def write(self, buf):
-        with self.condition:
-            self.frame = buf
-            self.condition.notify_all()
+# Configuration for external camera process
+CAMERA_PROC_PATH = '/home/hdtk7897/manage_aquarium/python/mjpeg_server.py'
+CAMERA_URL = 'http://127.0.0.1:8010/stream.mjpg'
 
 
-picam2 = Picamera2()
-picam2.configure(picam2.create_video_configuration(main={"size": (640, 480)}))
-output = StreamingOutput()
-picam2.start_recording(MJPEGEncoder(), FileOutput(output))
+def ensure_camera_process_running():
+    """Try to connect to the local camera server; if unavailable, start it as a separate process."""
+    try:
+        r = requests.get(CAMERA_URL, stream=True, timeout=1)
+        if r.status_code == 200:
+            return
+    except Exception:
+        pass
+
+    # Start the camera server process (detached). Use the same python executable.
+    try:
+        subprocess.Popen([sys.executable, CAMERA_PROC_PATH], stdout=PIPE, stderr=PIPE, start_new_session=True)
+    except Exception as e:
+        # If starting fails, log and continue; the endpoint will retry when clients connect
+        logging.getLogger(__name__).exception('Failed to start camera process: %s', e)
 
 
 
 
 def get_frame():
+    """Proxy frames from the local mjpeg server and yield raw multipart bytes to the client.
+
+    This generator will reconnect on errors.
+    """
     logger = logging.getLogger(__name__)
     backoff = 1
     max_backoff = 16
-    # Keep the generator alive and retry on errors with exponential backoff
     while True:
         try:
-            # Reset backoff on successful loop entry
-            backoff = 1
-            while True:
-                with output.condition:
-                    output.condition.wait()
-                    frame = output.frame
-                    # Skip if we don't have a frame yet
-                    if frame is None:
-                        continue
-                    yield b"--frame\r\n" b"Content-Type: image/jpeg\r\n\r\n" + frame + b"\r\n"
+            # Ensure camera process is running (best-effort)
+            ensure_camera_process_running()
+
+            with requests.get(CAMERA_URL, stream=True, timeout=5) as resp:
+                if resp.status_code != 200:
+                    logger.warning('Camera server returned %s', resp.status_code)
+                    time.sleep(backoff)
+                    backoff = min(backoff * 2, max_backoff)
+                    continue
+
+                backoff = 1
+                for chunk in resp.iter_content(chunk_size=1024):
+                    if chunk:
+                        yield chunk
         except Exception:
-            # Log the exception and retry after sleeping
-            logger.exception("Error reading frames — retrying in %s seconds", backoff)
+            logger.exception('Error proxying frames — retrying in %s seconds', backoff)
             time.sleep(backoff)
             backoff = min(backoff * 2, max_backoff)
-            # continue to retry
+            continue
 
 
 

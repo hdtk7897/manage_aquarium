@@ -1,0 +1,19 @@
+[Unit]
+Description=Picamera2 MJPEG Server
+After=network.target
+
+[Service]
+# 実行するユーザ名に合わせて変更してください（例: hdtk7897 または pi）
+User=hdtk7897
+WorkingDirectory=/home/hdtk7897/manage_aquarium/python
+# 必要に応じて仮想環境の python 実行ファイルに置き換えてください
+ExecStart=/usr/bin/env python3 /home/hdtk7897/manage_aquarium/python/mjpeg_server.py
+Restart=on-failure
+RestartSec=5
+# 環境変数（出力のバッファリングを無効化）
+Environment=PYTHONUNBUFFERED=1
+
+# ログは systemd ジャーナルに送られます。ログ確認は 'journalctl -u mjpeg_server.service' を使用。
+
+[Install]
+WantedBy=multi-user.target
