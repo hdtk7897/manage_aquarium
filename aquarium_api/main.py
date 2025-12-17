@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from strawberry.asgi import GraphQL
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -12,7 +12,18 @@ import io
 import time
 import logging
 from threading import Condition
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
+from pathlib import Path
+import requests
+# Import mjpeg_generator in a way that works whether this module is run
+# as a package (uvicorn aquarium_api.main:app) or as a script/cwd module
+try:
+    from .mjpeg_stream import mjpeg_generator
+except Exception:
+    try:
+        from mjpeg_stream import mjpeg_generator
+    except Exception:
+        from aquarium_api.mjpeg_stream import mjpeg_generator
 
 
 # (6) FastAPIインスタンス作成
@@ -28,59 +39,17 @@ app.add_middleware(
 )
 
 
-# Configuration for external camera process
-CAMERA_PROC_PATH = '/home/hdtk7897/manage_aquarium/python/mjpeg_server.py'
-CAMERA_URL = 'http://127.0.0.1:8010/stream.mjpg'
+@app.get("/sample")
+async def sample():
+    """Serve the example HTML file bundled with this package.
 
-
-def ensure_camera_process_running():
-    """Try to connect to the local camera server; if unavailable, start it as a separate process."""
-    try:
-        r = requests.get(CAMERA_URL, stream=True, timeout=1)
-        if r.status_code == 200:
-            return
-    except Exception:
-        pass
-
-    # Start the camera server process (detached). Use the same python executable.
-    try:
-        subprocess.Popen([sys.executable, CAMERA_PROC_PATH], stdout=PIPE, stderr=PIPE, start_new_session=True)
-    except Exception as e:
-        # If starting fails, log and continue; the endpoint will retry when clients connect
-        logging.getLogger(__name__).exception('Failed to start camera process: %s', e)
-
-
-
-
-def get_frame():
-    """Proxy frames from the local mjpeg server and yield raw multipart bytes to the client.
-
-    This generator will reconnect on errors.
+    Uses an absolute path so it works whether the app is started from
+    the repo root or from inside the `aquarium_api` directory.
     """
-    logger = logging.getLogger(__name__)
-    backoff = 1
-    max_backoff = 16
-    while True:
-        try:
-            # Ensure camera process is running (best-effort)
-            ensure_camera_process_running()
-
-            with requests.get(CAMERA_URL, stream=True, timeout=5) as resp:
-                if resp.status_code != 200:
-                    logger.warning('Camera server returned %s', resp.status_code)
-                    time.sleep(backoff)
-                    backoff = min(backoff * 2, max_backoff)
-                    continue
-
-                backoff = 1
-                for chunk in resp.iter_content(chunk_size=1024):
-                    if chunk:
-                        yield chunk
-        except Exception:
-            logger.exception('Error proxying frames — retrying in %s seconds', backoff)
-            time.sleep(backoff)
-            backoff = min(backoff * 2, max_backoff)
-            continue
+    p = Path(__file__).resolve().parent / "sample.html"
+    if not p.exists():
+        raise HTTPException(status_code=404, detail="sample.html not found")
+    return FileResponse(str(p), media_type="text/html")
 
 
 
@@ -89,21 +58,35 @@ def get_frame():
 async def index():
     return {"message": "Welcome to the Aquarium API"}
 
-@app.get("/mjpeg", response_class=StreamingResponse)
-def mjpeg(request: Request):
-    try:
-        frames = get_frame()
-        response = StreamingResponse(
-            frames,
-            headers={
-                "Cache-Control": "no-cache, private",
-                "Pragma": "no-cache",
-            },
-            media_type="multipart/x-mixed-replace; boundary=frame",
-        )
-        return response
-    except Exception as e:
-        print("Error! Route")
 
 
 app.add_route("/graphql", GraphQL(schema))
+
+
+@app.get("/mjpeg")
+def mjpeg():
+    """Return an MJPEG stream sourced from Picamera2.
+
+    The response uses content type 'multipart/x-mixed-replace; boundary=FRAME'.
+    """
+    # Proxy to local camera process (must be started separately)
+    camera_url = 'http://127.0.0.1:8010/stream.mjpg'
+    try:
+        resp = requests.get(camera_url, stream=True, timeout=5)
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Camera process not reachable: {e}")
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"Camera process returned {resp.status_code}")
+
+    def stream_from_camera(r):
+        try:
+            for chunk in r.iter_content(chunk_size=1024):
+                if chunk:
+                    yield chunk
+        finally:
+            try:
+                r.close()
+            except Exception:
+                pass
+
+    return StreamingResponse(stream_from_camera(resp), media_type=resp.headers.get('Content-Type', 'multipart/x-mixed-replace; boundary=FRAME'))
