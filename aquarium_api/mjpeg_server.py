@@ -7,8 +7,11 @@
 import io
 import logging
 import socketserver
+import subprocess
+from pathlib import Path
 from http import server
 from threading import Condition
+from typing import Optional
 
 from picamera2 import Picamera2
 from picamera2.encoders import JpegEncoder
@@ -26,16 +29,83 @@ PAGE = """\
 </html>
 """
 
+VIDEO_DIR = Path('/Users/hdtk7897/git/manage_aquarium/videos')
+SEGMENT_SECONDS = 600
+FPS = 15
+
+
+class VideoSegmentWriter:
+    def __init__(self, output_dir: Path, segment_seconds: int = 600, fps: int = 15):
+        self.output_dir = output_dir
+        self.segment_seconds = segment_seconds
+        self.fps = fps
+        self.proc = None
+        self._start()
+
+    def _start(self):
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        output_pattern = str(self.output_dir / '%Y%m%d_%H%M%S.mp4')
+        cmd = [
+            'ffmpeg',
+            '-hide_banner',
+            '-loglevel', 'warning',
+            '-f', 'mjpeg',
+            '-r', str(self.fps),
+            '-i', 'pipe:0',
+            '-c:v', 'libx264',
+            '-preset', 'veryfast',
+            '-crf', '23',
+            '-f', 'segment',
+            '-segment_time', str(self.segment_seconds),
+            '-reset_timestamps', '1',
+            '-strftime', '1',
+            output_pattern,
+        ]
+        try:
+            self.proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
+        except FileNotFoundError:
+            logging.exception('ffmpeg command not found; video output disabled')
+            self.proc = None
+        except Exception:
+            logging.exception('Failed to start ffmpeg; video output disabled')
+            self.proc = None
+
+    def write(self, jpeg_bytes: bytes):
+        if self.proc is None or self.proc.stdin is None:
+            return
+        try:
+            self.proc.stdin.write(jpeg_bytes)
+            self.proc.stdin.flush()
+        except BrokenPipeError:
+            logging.exception('ffmpeg pipe closed; video output disabled')
+            self.proc = None
+        except Exception:
+            logging.exception('Unexpected error while writing to ffmpeg')
+
+    def close(self):
+        if self.proc is None:
+            return
+        try:
+            if self.proc.stdin:
+                self.proc.stdin.close()
+            self.proc.wait(timeout=5)
+        except Exception:
+            self.proc.kill()
+
 
 class StreamingOutput(io.BufferedIOBase):
-    def __init__(self):
+    def __init__(self, video_writer: Optional[VideoSegmentWriter] = None):
         self.frame = None
         self.condition = Condition()
+        self.video_writer = video_writer
 
     def write(self, buf):
+        if self.video_writer:
+            self.video_writer.write(buf)
         with self.condition:
             self.frame = buf
             self.condition.notify_all()
+        return len(buf)
 
 
 class StreamingHandler(server.BaseHTTPRequestHandler):
@@ -85,7 +155,8 @@ class StreamingServer(socketserver.ThreadingMixIn, server.HTTPServer):
 
 picam2 = Picamera2()
 picam2.configure(picam2.create_video_configuration(main={"size": (640, 480)}))
-output = StreamingOutput()
+video_writer = VideoSegmentWriter(VIDEO_DIR, SEGMENT_SECONDS, FPS)
+output = StreamingOutput(video_writer=video_writer)
 picam2.start_recording(JpegEncoder(), FileOutput(output))
 
 try:
@@ -94,3 +165,4 @@ try:
     server.serve_forever()
 finally:
     picam2.stop_recording()
+    video_writer.close()
