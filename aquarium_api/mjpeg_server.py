@@ -29,7 +29,7 @@ PAGE = """\
 </html>
 """
 
-VIDEO_DIR = Path('/Users/hdtk7897/git/manage_aquarium/videos')
+VIDEO_DIR = Path('/home/hdtk7897/manage_aquarium/videos')
 SEGMENT_SECONDS = 600
 FPS = 15
 
