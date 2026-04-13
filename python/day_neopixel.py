@@ -121,13 +121,14 @@ def init_pi5neo(num_leds=60, spi_speed=800):
 
 def main(hour):
     logging.basicConfig(level=logging.INFO)
+    logging.info("Set neopixel to hour %s color %s", hour, hour_light[hour])
 
     pi5_neo = init_pi5neo(num_leds=60, spi_speed=800)
 
     # Run demo functions
     demo_solid_color(pi5_neo, *hour_light[hour])
     # demo_rainbow_cycle(pi5_neo)
-
+    
 
 if __name__ == "__main__":
     import datetime
