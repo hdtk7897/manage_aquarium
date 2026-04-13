@@ -1,0 +1,20 @@
+[Unit]
+Description=Uvicorn instance for Aquarium API (FastAPI)
+After=network.target
+
+[Service]
+# Run as your user
+User=hdtk7897
+# Set WorkingDirectory to where the package is located
+WorkingDirectory=/home/hdtk7897/manage_aquarium/aquarium_api
+# Use system python3 or change to your venv python path
+# If you run inside a virtualenv, set ExecStart to the venv python, e.g.
+#ExecStart=/home/hdtk7897/venv/bin/python -m uvicorn aquarium_api.main:app --host 0.0.0.0 --port 8000
+ExecStart=/home/hdtk7897/venv/bin/python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
+#ExecStart=/usr/bin/env python3 -m uvicorn aquarium_api.main:app --host 0.0.0.0 --port 8000
+Restart=on-failure
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
